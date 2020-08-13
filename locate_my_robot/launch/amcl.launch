@@ -20,7 +20,7 @@
 
       <!-- initial pose (optional) -->
         <param name="initial_pose_x" value="0.0"/>
-        <param name="initial_pose_x" value="0.0"/>
+        <param name="initial_pose_y" value="0.0"/>
 
       <!-- paramters to increase localization performance-->
           <!-- min and max number of particles -->

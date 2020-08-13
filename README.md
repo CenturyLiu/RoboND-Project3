@@ -38,3 +38,6 @@ Parameters
     |recovery_alpha_slow|0.001|Suggested value by the [ROS-amcl package](http://wiki.ros.org/amcl), has effect in dealing with the "robot-kidnap" issue according to my experiment.|
     |recovery_alpha_fast|0.1|Suggested value by the [ROS-amcl package](http://wiki.ros.org/amcl), has effect in dealing with the "robot-kidnap" issue according to my experiment.|
     
+![amcl parameter tuning](https://github.com/CenturyLiu/RoboND-Project3/blob/master/amcl_parameter_demo.gif)
+
+> left is the amcl performance with default parameters, right is the performance with tuned paramter described above. Clearly, the tuned parameter outperforms the default.

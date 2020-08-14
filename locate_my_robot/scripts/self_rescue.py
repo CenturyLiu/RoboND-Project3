@@ -23,13 +23,13 @@ class SelfRescueMode(object):
         self.linear_vel = 1.0 #m/s
 
         # threshold showing there exists obstacles
-        self.stop_threshold = 1.0 # if any thing within this range emerge in the laser scan, stop robot
+        self.stop_threshold = 1.5 # if any thing within this range emerge in the laser scan, stop robot
         self.move_threshold = 4.0 # if all points in the front are farther then this value, go straight forward
 
         # parameter storing the width of the robot
         self.robot_width = 1.5
         self.open_area_pts = 40 # at least 40 points exist in an "open area"
-        #self.out_of_boundary_threshold = 5 #stop center detecting if y_distance > robot_width / 2 for more than 5 pts
+        #self.out_of_boundary_threshold = 5 # threshold for tolerating small number of points within move_threshold
 
         # paramter storing the current mode of the robot
         self.mode = "turning" # valid values: "turning", "forward"
@@ -39,6 +39,12 @@ class SelfRescueMode(object):
 
         # store the previous turning state
         self.previous_turn = None
+        self.cumulative_turn_angle = 0.0 # store the cumulative turning angle
+        self.view_coef = 0.5 # coefficient to determine the view for navigation detection
+        self.view_coef_reset = 0.5 # backup copy of the coefficient to determine the view for navigation detection
+        self.view_decay_rate = 0.5 # gradually narrow the view
+        self.straight_count = 0
+        self.restore_view_threshold = 10 # move straight 5 steps and then recover the view
 
     def do_nothing(self):
         print("why we are here?")
@@ -60,6 +66,7 @@ class SelfRescueMode(object):
         self.twist.linear.x = linear_speed
         self.twist.angular.z = 0.0
         self.pub.publish(self.twist)
+        time.sleep(0.05)
 
 
     def counter_clockwise_turn(self, angle= 5.0):
@@ -130,7 +137,7 @@ class SelfRescueMode(object):
         front_distance_list = []
         front_distance_index_list = []
 
-        for ii in range(int(middle_count / 2),int(middle_count / 2 * 3)):
+        for ii in range(int(middle_count * (1 - self.view_coef)),int(middle_count * (1 + self.view_coef))):
             x_distance = abs(latest_scan.ranges[ii] * np.cos(angle_min + angle_increment * ii))
             y_distance = abs(latest_scan.ranges[ii] * np.sin(angle_min + angle_increment * ii))
             if y_distance <= self.robot_width / 2: # check whether the point is in the front
@@ -138,14 +145,23 @@ class SelfRescueMode(object):
                 front_distance_index_list.append(ii)
 
         if self.mode == "turning":
+            print("length == ", len(np.array(front_distance_list) < self.move_threshold))
             if min(front_distance_list) > self.move_threshold:
                 # we have find an open area, go straight forward
                 self.mode = "forward"  
                 self.move_straight_forward(self.linear_vel)
                 self.previous_turn = None # going straight forward, clear turning
+                self.cumulative_turn_angle = 0.0
+                self.straight_count = 0
                 print("going straight forward!")
                 return
-            #else:
+            else:
+                if self.cumulative_turn_angle > 360.0:
+                    # turned around without finding open place, weaken the constraint on view
+                    print("robot captured, weaken constraint")
+                    self.view_coef *= self.view_decay_rate
+                    self.cumulative_turn_angle = 0.0
+
             #    self.counter_clockwise_turn() # slowly turn counter-clockwise, try to find an open area
             #    return
 
@@ -155,10 +171,16 @@ class SelfRescueMode(object):
                 # we are moving in an open area, keep going
                 self.mode = "forward"
                 self.move_straight_forward(self.linear_vel)
+                self.straight_count += 1
+                if self.straight_count > self.restore_view_threshold:
+                    print("reset view")
+                    self.view_coef = self.view_coef_reset # reset the view coefficient
                 return
             else:
                 # there exists obstacle in the front, stop
                 self.mode = "turning"
+                self.straight_count = 0
+                self.cumulative_turn_angle = 0.0
                 self.move_straight_forward(0.0) # stop robot
 
         # robot meets obstacle if coming here
@@ -172,9 +194,9 @@ class SelfRescueMode(object):
         left_occupied = False
 
         if len(small_distance_index) != 0:
-            if min(small_distance_index) < middle_count * 0.75:
+            if min(small_distance_index) < middle_count * (1 - self.view_coef / 2):
                 right_occupied = True
-            if max(small_distance_index) > middle_count / 0.75:
+            if max(small_distance_index) > middle_count / (1 - self.view_coef / 2):
                 left_occupied = True
 
         if right_occupied and not left_occupied:
@@ -183,6 +205,8 @@ class SelfRescueMode(object):
                 print("right occupied, turn left")
                 self.previous_turn = "left"
                 self.counter_clockwise_turn(20.0)
+                # update the cumulative turning angle
+                self.cumulative_turn_angle += 20.0
                 return
 
         if left_occupied and not right_occupied:
@@ -191,6 +215,8 @@ class SelfRescueMode(object):
                 print("left occupied, turn right")
                 self.previous_turn = "right"
                 self.counter_clockwise_turn(-20.0)
+                # update the cumulative turning angle
+                self.cumulative_turn_angle -= 20.0
                 return
 
         '''
@@ -219,9 +245,14 @@ class SelfRescueMode(object):
         print("Turn to find open area")
         self.mode = "turning"
         if self.previous_turn != "right":
-            self.counter_clockwise_turn(15.0)
+            #self.counter_clockwise_turn(15.0)
+            self.counter_clockwise_turn(5.0)
+            # update the cumulative turning angle
+            self.cumulative_turn_angle += 5.0
         else:
             self.counter_clockwise_turn(45.0)
+            # update the cumulative turning angle
+            self.cumulative_turn_angle += 45.0
         self.previous_turn = "left"
         
         return

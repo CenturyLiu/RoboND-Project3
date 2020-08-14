@@ -47,10 +47,17 @@ Parameters
 The robot is able to recover from kidnap in most cases. But it also occassionally fails to recover. 
 
 ![success recovery 1](https://github.com/CenturyLiu/RoboND-Project3/blob/master/successful_recovery_1.gif)
+
 > Successful recovery from a wrong initial pose. To reproduce this feature, use the launch file "".
 
+
 ![success recovery 2](https://github.com/CenturyLiu/RoboND-Project3/blob/master/successful_recovery_2.gif)
+
 > Successful recovery from a kidnap
 
-![failure](https://github.com/CenturyLiu/RoboND-Project3/blob/master/successful_recovery_2.gif)
+
+
+
+![failure](https://github.com/CenturyLiu/RoboND-Project3/blob/master/fail_to_recover.gif)
+
 > Failure to recover after being kidnapped. The algorithm converge to a wrong place.

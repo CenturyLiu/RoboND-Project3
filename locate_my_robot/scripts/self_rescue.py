@@ -20,22 +20,25 @@ class SelfRescueMode(object):
         
         # angular and linear velocity in rescue mode
         self.angular_vel = 0.2 #rad/s
-        self.linear_vel = 0.2 #m/s
+        self.linear_vel = 1.0 #m/s
 
         # threshold showing there exists obstacles
         self.stop_threshold = 1.0 # if any thing within this range emerge in the laser scan, stop robot
-        self.move_threshold = 5.0 # if all points in the front are farther then this value, go straight forward
+        self.move_threshold = 4.0 # if all points in the front are farther then this value, go straight forward
 
         # parameter storing the width of the robot
-        self.robot_width = 1.1
+        self.robot_width = 1.5
         self.open_area_pts = 40 # at least 40 points exist in an "open area"
-        self.out_of_boundary_threshold = 5 #stop center detecting if y_distance > robot_width / 2 for more than 5 pts
+        #self.out_of_boundary_threshold = 5 #stop center detecting if y_distance > robot_width / 2 for more than 5 pts
 
         # paramter storing the current mode of the robot
         self.mode = "turning" # valid values: "turning", "forward"
 
         # define the variable to have velocity
         self.twist = Twist()
+
+        # store the previous turning state
+        self.previous_turn = None
 
     def do_nothing(self):
         print("why we are here?")
@@ -74,7 +77,10 @@ class SelfRescueMode(object):
 		    angle can also be negative, which will lead to clockwise turning
         '''
         self.twist.linear.x = 0.0
-        self.twist.angular.z = self.angular_vel # 0.2 rad/s
+        if angle != 0.0:
+            self.twist.angular.z = angle / abs(angle) * self.angular_vel #self.angular_vel # 0.2 rad/s
+        else:
+            self.twist.angular.z = 0.0
         angle_rad = angle / 180.0 * np.pi 
         twist_time = abs(angle_rad / self.angular_vel)
         #print("angle_rad = %f, twist_time = %f" % (angle_rad,twist_time))
@@ -122,43 +128,21 @@ class SelfRescueMode(object):
         no_obstacle = True
 
         front_distance_list = []
-        '''
-        out_of_boundary_count = 0
+        front_distance_index_list = []
 
-        for ii in range(middle_count,-1,-1):
-            x_distance = abs(latest_scan.ranges[ii] * np.cos(angle_min + angle_increment * ii))
-            y_distance = abs(latest_scan.ranges[ii] * np.sin(angle_min + angle_increment * ii))
-            if y_distance > self.robot_width / 2: # check whether the point is in the front
-                print("min index: %d, y_distance: %f" % (ii,y_distance))
-                out_of_boundary_count += 1
-                if out_of_boundary_count > self.out_of_boundary_threshold: # add a "out of boundary count" against inaccuracy in lidar measurement
-                    break
-            front_distance_list.append(x_distance)
-
-        # reset the buffer
-        out_of_boundary_count = 0
-
-        for ii in range(middle_count,len(latest_scan.ranges)):
-            x_distance = abs(latest_scan.ranges[ii] * np.cos(angle_min + angle_increment * ii))
-            y_distance = abs(latest_scan.ranges[ii] * np.sin(angle_min + angle_increment * ii))
-            if y_distance > self.robot_width / 2: # check whether the point is in the front
-                print("max index: %d, y_distance: %f" % (ii,y_distance))
-                out_of_boundary_count += 1
-                if out_of_boundary_count > self.out_of_boundary_threshold: # add a "out of boundary count" against inaccuracy in lidar measurement
-                    break
-            front_distance_list.append(x_distance)
-        '''
         for ii in range(int(middle_count / 2),int(middle_count / 2 * 3)):
             x_distance = abs(latest_scan.ranges[ii] * np.cos(angle_min + angle_increment * ii))
             y_distance = abs(latest_scan.ranges[ii] * np.sin(angle_min + angle_increment * ii))
             if y_distance <= self.robot_width / 2: # check whether the point is in the front
                 front_distance_list.append(x_distance)
+                front_distance_index_list.append(ii)
 
         if self.mode == "turning":
             if min(front_distance_list) > self.move_threshold:
                 # we have find an open area, go straight forward
                 self.mode = "forward"  
                 self.move_straight_forward(self.linear_vel)
+                self.previous_turn = None # going straight forward, clear turning
                 print("going straight forward!")
                 return
             #else:
@@ -166,6 +150,7 @@ class SelfRescueMode(object):
             #    return
 
         elif self.mode == "forward":
+            self.previous_turn = None # going straight forward, clear turning
             if min(front_distance_list) > self.stop_threshold:
                 # we are moving in an open area, keep going
                 self.mode = "forward"
@@ -177,11 +162,43 @@ class SelfRescueMode(object):
                 self.move_straight_forward(0.0) # stop robot
 
         # robot meets obstacle if coming here
+
+        # check which area is occupied and don't turn into this direction
+        front_distance_list = np.array(front_distance_list)
+        front_distance_index_list = np.array(front_distance_index_list)
+        small_distance_index = front_distance_index_list[front_distance_list <= self.stop_threshold]
+
+        right_occupied = False
+        left_occupied = False
+
+        if len(small_distance_index) != 0:
+            if min(small_distance_index) < middle_count * 0.75:
+                right_occupied = True
+            if max(small_distance_index) > middle_count / 0.75:
+                left_occupied = True
+
+        if right_occupied and not left_occupied:
+            # turn left
+            if not self.previous_turn == "right":
+                print("right occupied, turn left")
+                self.previous_turn = "left"
+                self.counter_clockwise_turn(20.0)
+                return
+
+        if left_occupied and not right_occupied:
+            # turn right
+            if not self.previous_turn == "left": # avoid oscillating between turning left and right
+                print("left occupied, turn right")
+                self.previous_turn = "right"
+                self.counter_clockwise_turn(-20.0)
+                return
+
+        '''
         # check whether there exists an open area 
         exist_open_area = False
         center_of_open_area = None
         for ii in range(0,len(latest_scan.ranges) - self.open_area_pts):
-            if min(latest_scan.ranges[ii:ii+self.open_area_pts]) > self.move_threshold + 1.0:
+            if min(latest_scan.ranges[ii:ii+self.open_area_pts]) > self.move_threshold + 1.0 and (ii < middle_count - 10 or ii > middle_count + 10):
                 exist_open_area = True
                 center_of_open_area = ii + self.open_area_pts / 2
                 break
@@ -197,8 +214,17 @@ class SelfRescueMode(object):
             self.mode = "turning"
             self.counter_clockwise_turn(45.0) # turn 45 degrees
             return
-
-
+        '''
+        # both left and right occupied, turn to find open area
+        print("Turn to find open area")
+        self.mode = "turning"
+        if self.previous_turn != "right":
+            self.counter_clockwise_turn(15.0)
+        else:
+            self.counter_clockwise_turn(45.0)
+        self.previous_turn = "left"
+        
+        return
 def main():
     rospy.init_node('self_rescue')
     self_rescuer = SelfRescueMode()

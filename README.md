@@ -3,7 +3,38 @@ Implementation of Project 3 of [udacity robot software nanodegree](https://blog.
 
 ## Installation
 
-Download the packages into your ROS workspace. Please unzip the "classroom_map.pgm.zip" in the [locate_my_robot/maps folder](https://github.com/CenturyLiu/RoboND-Project3/tree/master/locate_my_robot/maps). (The map is too big to be uploaded directly onto github)
+Download the packages into your ROS workspace. 
+
+Notes:
+Please unzip the "classroom_map.pgm.zip" in the [locate_my_robot/maps folder](https://github.com/CenturyLiu/RoboND-Project3/tree/master/locate_my_robot/maps). (The map is too big to be uploaded directly onto github)
+
+go to the locate_my_robot/scripts folder, enter
+
+        chmod +x my_robot_teleop.py
+        chmod +x self_rescue.py
+
+## Usage
+
+To open the gazebo world with robot
+
+        roslaunch my_robot world.launch
+
+To open normal amcl + movebase
+        
+        roslaunch locate_my_robot amcl.launch
+        
+To reproduce the feature of recovery from wrong init-pose
+
+        roslaunch locate_my_robot amcl_with_wrong_init_pose.launch
+        
+To teleop the robot
+
+        rosrun locate_my_robot my_robot_teleop.py
+        
+To let the robot drive itself inside the environment
+
+        rosrun locate_my_robot self_rescue.py
+       
 
 ## AMCL parameters
 
@@ -48,7 +79,7 @@ The robot is able to recover from kidnap in most cases. But it also occassionall
 
 ![success recovery 1](https://github.com/CenturyLiu/RoboND-Project3/blob/master/successful_recovery_1.gif)
 
-> Successful recovery from a wrong initial pose. To reproduce this feature, use the launch file "".
+> Successful recovery from a wrong initial pose. To reproduce this feature, use the launch file [amcl_with_wrong_init_pose.launch](https://github.com/CenturyLiu/RoboND-Project3/blob/master/locate_my_robot/launch/amcl_with_wrong_init_pose.launch).
 
 
 ![success recovery 2](https://github.com/CenturyLiu/RoboND-Project3/blob/master/successful_recovery_2.gif)
